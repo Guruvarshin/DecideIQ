@@ -3,6 +3,7 @@ from pymongo.errors import DuplicateKeyError
 from app.core.database import get_database
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.dependencies import get_current_user
+from app.core.config import settings
 from app.models.user import UserRegister, UserLogin
 from datetime import datetime, timezone
 
@@ -11,14 +12,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 COOKIE_NAME = "access_token"
 COOKIE_MAX_AGE = 7 * 24 * 60 * 60
 
+# Cross-site (Vercel → Render) requires SameSite=None + Secure=True.
+# Locally both run on localhost so Lax + Secure=False is fine.
+_IS_PROD = "localhost" not in settings.frontend_url
+
 
 def _set_auth_cookie(response: Response, token: str):
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="none" if _IS_PROD else "lax",
+        secure=_IS_PROD,
         max_age=COOKIE_MAX_AGE,
     )
 
@@ -60,7 +65,11 @@ async def login(body: UserLogin, response: Response):
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(COOKIE_NAME)
+    response.delete_cookie(
+        COOKIE_NAME,
+        samesite="none" if _IS_PROD else "lax",
+        secure=_IS_PROD,
+    )
     return {"message": "Logged out"}
 
 
