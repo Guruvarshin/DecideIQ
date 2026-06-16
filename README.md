@@ -1,5 +1,7 @@
 # DecideIQ - AI Decision Engine
 
+**Live:** [decide-iq.vercel.app](https://decide-iq.vercel.app) &nbsp;|&nbsp; **API:** [decideiq.onrender.com](https://decideiq.onrender.com)
+
 Upload your options. Ask your questions. Get one clear winner.
 
 DecideIQ is a full-stack AI application that compares multiple documents (job offers, insurance plans, product specs, contracts) side-by-side using a production-grade RAG pipeline, and delivers a scored verdict with evidence from the source documents.
@@ -91,11 +93,12 @@ Hybrid retrieval
 - **Child chunks:** 400 characters (precise retrieval)
 - Retrieval hits children → expands to parents for answering
 
-### Question generation (LangGraph - 2 nodes)
+### Question generation (LangGraph - 3 nodes)
 1. **Node 1:** Rephrases user questions to be specific and measurable
-2. **Node 2:** Generates 5 additional questions covering dimensions the user didn't ask about
+2. **Node 2:** Generates 5 questions per document from its actual content (concurrently), covering key decision dimensions — 15 questions total for 3 docs
+3. **Node 3:** Deduplicates across all per-doc questions, keeping the clearest phrasing of each unique question
 
-Questions are generated from the **comparison title only** - not from document text - so every document is judged on the same neutral criteria.
+Questions are **grounded in document content**, so the pipeline extracts what actually matters from each option rather than guessing from the title alone.
 
 ---
 
@@ -105,15 +108,15 @@ Questions are generated from the **comparison title only** - not from document t
 
 | Metric | TechCorp Offer | FinEdge Offer |
 |---|---|---|
-| Faithfulness | 0.88 | 0.84 |
-| Answer Relevancy | 0.74 | 0.63 |
-| Context Recall | 0.88 | 0.68 |
-| Answer Correctness | 0.70 | 0.50 |
-| **Confidence Score** | **80.9%** | **73.7%** |
+| Faithfulness | 0.9196 | 0.8438 |
+| Answer Relevancy | 0.7042 | 0.7196 |
+| Context Recall | 0.7396 | 0.6771 |
+| Answer Correctness | 0.6115 | 0.5930 |
+| **Confidence Score** | **81.2%** | **78.2%** |
 
-- **Faithfulness ~0.85+** - very low hallucination; answers stay grounded in retrieved context
-- **Context Recall 0.88** - RAG retrieves most of the relevant passages from structured documents
-- **Answer Correctness** - lower because the pipeline sometimes paraphrases exact figures; golden answers require verbatim numbers
+- **Faithfulness 0.92/0.84** — very low hallucination; answers stay grounded in retrieved context
+- **Context Recall 0.74/0.68** — RAG retrieves most relevant passages; misses on questions where content spans multiple scattered sections
+- **Answer Correctness ~0.60** — pipeline sometimes paraphrases exact figures; golden answers require verbatim numbers like ₹18,00,000
 
 ---
 
@@ -205,7 +208,7 @@ docker exec decideiq-backend-1 python tests/test_ragas_golden.py
 
 ## Key design decisions
 
-- **Title-driven question generation** - documents are not read during question generation; both documents face the same questions, eliminating bias toward whichever document's content was scanned
+- **Document-grounded question generation** - 5 questions are generated per document from its actual content, then deduplicated across all docs; this surfaces what each option actually covers rather than guessing from the title alone
 - **CRAG with grounding check** - web search results are only used if they pass the same cosine similarity threshold (≥ 0.35) as RAG results; avoids hallucination from off-topic web results
 - **Parent-child chunking** - children (400 chars) are retrieved for precision; parents (1800 chars) are returned for answering, giving full context without noise
 - **All-not-found handling** - when every document returns "not found" for a question, scores default to neutral (5/10) so unanswerable questions don't penalise all options equally

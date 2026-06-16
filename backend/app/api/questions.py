@@ -64,9 +64,14 @@ async def generate_session_questions(
     if not title:
         raise HTTPException(status_code=400, detail="Set a session title before generating questions")
 
-    user_questions = session.get("user_questions", [])
+    docs = session.get("documents", [])
+    if len(docs) < 2:
+        raise HTTPException(status_code=400, detail="Upload at least 2 documents before generating questions")
 
-    questions = await generate_questions(title=title, user_questions=user_questions)
+    user_questions = session.get("user_questions", [])
+    doc_texts = [d.get("raw_text", "") for d in docs]
+
+    questions = await generate_questions(title=title, user_questions=user_questions, doc_texts=doc_texts)
 
     await db.sessions.update_one(
         {"_id": oid},

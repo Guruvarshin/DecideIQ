@@ -45,8 +45,8 @@ async def run_comparison(session_id: str, session: dict) -> dict:
         all_not_found = all(_is_not_found(a) for a in answers)
         if not all_not_found:
             answered_questions += 1
-        for i, score in enumerate(scores):
-            doc_raw_scores[i] += score
+            for i, score in enumerate(scores):
+                doc_raw_scores[i] += score
 
         question_results.append(
             {
@@ -66,15 +66,13 @@ async def run_comparison(session_id: str, session: dict) -> dict:
             }
         )
 
-    # Use only answerable questions in the denominator; unanswerable ones contribute
-    # equal 5s to all docs so they don't change relative rankings but do inflate max_possible.
-    effective_questions = max(answered_questions, 1)
-    max_possible = effective_questions * 10 + (len(questions) - effective_questions) * 5
+    # Only answered questions count toward the score; unanswerable ones are skipped entirely.
+    max_possible = answered_questions * 10
     doc_summaries = [
         {
             "doc_name": docs[i]["name"],
             "raw_score": doc_raw_scores[i],
-            "percentage": round(doc_raw_scores[i] / max_possible * 100, 1),
+            "percentage": round(doc_raw_scores[i] / max_possible * 100, 1) if max_possible > 0 else 0.0,
         }
         for i in range(n_docs)
     ]
