@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 10080
 
-    frontend_url: str = "http://localhost:3000"
+    frontend_url: str = "https://decide-83kvzlvtn-guru-varshini-bs-projects-6f6032e0.vercel.app"
     chroma_persist_path: str = "./chroma_data"
 
     class Config:
