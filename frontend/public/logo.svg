@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#4f46e5"/>
+  <text x="10" y="50" font-size="46" font-weight="700" fill="white" font-family="system-ui, -apple-system, sans-serif">D</text>
+  <circle cx="54" cy="16" r="7" fill="#a5b4fc"/>
+  <circle cx="54" cy="16" r="4" fill="white"/>
+</svg>
