@@ -1,4 +1,4 @@
-# DecideIQ — AI Decision Engine
+# DecideIQ - AI Decision Engine
 
 Upload your options. Ask your questions. Get one clear winner.
 
@@ -9,10 +9,10 @@ DecideIQ is a full-stack AI application that compares multiple documents (job of
 ## What it does
 
 1. **Upload** 2+ documents (PDF, HTML, TXT, image)
-2. **Ask** what matters to you — or let the AI generate questions from your comparison title
-3. **Compare** — the RAG pipeline retrieves context per document and answers every question
-4. **Score** — answers are scored 1–10 comparatively; a final AI verdict names the winner
-5. **Evaluate** — RAGAS metrics (faithfulness, answer relevancy) measure answer quality per document
+2. **Ask** what matters to you - or let the AI generate questions from your comparison title
+3. **Compare** - the RAG pipeline retrieves context per document and answers every question
+4. **Score** - answers are scored 1–10 comparatively; a final AI verdict names the winner
+5. **Evaluate** - RAGAS metrics (faithfulness, answer relevancy) measure answer quality per document
 
 ---
 
@@ -26,13 +26,13 @@ DecideIQ is a full-stack AI application that compares multiple documents (job of
 | Database | MongoDB Atlas via Motor (async) |
 | Vector store | ChromaDB (persistent, one collection per doc) |
 | Embeddings | OpenAI `text-embedding-3-small` (1536-dim) |
-| LLM — answers & scoring | OpenAI `gpt-4o-mini` |
-| LLM — verdict | Anthropic `claude-sonnet-4-6` |
+| LLM - answers & scoring | OpenAI `gpt-4o-mini` |
+| LLM - verdict | Anthropic `claude-sonnet-4-6` |
 | RAG pipeline | LangGraph stateful graph |
 | Retrieval | BM25 + dense hybrid, RRF (k=60) |
 | Reranking | FlashRank cross-encoder (`ms-marco-MiniLM-L-12-v2`) |
 | Compression | LangChain contextual compression |
-| Web fallback | CRAG — Tavily search with grounding check |
+| Web fallback | CRAG - Tavily search with grounding check |
 | Evaluation | RAGAS 0.2.14 (faithfulness + answer relevancy) |
 | Ingestion | PyMuPDF, BeautifulSoup, Tesseract OCR, Pillow |
 
@@ -91,15 +91,15 @@ Hybrid retrieval
 - **Child chunks:** 400 characters (precise retrieval)
 - Retrieval hits children → expands to parents for answering
 
-### Question generation (LangGraph — 2 nodes)
+### Question generation (LangGraph - 2 nodes)
 1. **Node 1:** Rephrases user questions to be specific and measurable
 2. **Node 2:** Generates 5 additional questions covering dimensions the user didn't ask about
 
-Questions are generated from the **comparison title only** — not from document text — so every document is judged on the same neutral criteria.
+Questions are generated from the **comparison title only** - not from document text - so every document is judged on the same neutral criteria.
 
 ---
 
-## RAGAS evaluation scores (golden dataset — job offer comparison)
+## RAGAS evaluation scores (golden dataset - job offer comparison)
 
 8 factual questions evaluated against hand-written golden answers grounded in actual document text.
 
@@ -111,9 +111,9 @@ Questions are generated from the **comparison title only** — not from document
 | Answer Correctness | 0.70 | 0.50 |
 | **Confidence Score** | **80.9%** | **73.7%** |
 
-- **Faithfulness ~0.85+** — very low hallucination; answers stay grounded in retrieved context
-- **Context Recall 0.88** — RAG retrieves most of the relevant passages from structured documents
-- **Answer Correctness** — lower because the pipeline sometimes paraphrases exact figures; golden answers require verbatim numbers
+- **Faithfulness ~0.85+** - very low hallucination; answers stay grounded in retrieved context
+- **Context Recall 0.88** - RAG retrieves most of the relevant passages from structured documents
+- **Answer Correctness** - lower because the pipeline sometimes paraphrases exact figures; golden answers require verbatim numbers
 
 ---
 
@@ -205,9 +205,9 @@ docker exec decideiq-backend-1 python tests/test_ragas_golden.py
 
 ## Key design decisions
 
-- **Title-driven question generation** — documents are not read during question generation; both documents face the same questions, eliminating bias toward whichever document's content was scanned
-- **CRAG with grounding check** — web search results are only used if they pass the same cosine similarity threshold (≥ 0.35) as RAG results; avoids hallucination from off-topic web results
-- **Parent-child chunking** — children (400 chars) are retrieved for precision; parents (1800 chars) are returned for answering, giving full context without noise
-- **All-not-found handling** — when every document returns "not found" for a question, scores default to neutral (5/10) so unanswerable questions don't penalise all options equally
-- **FlashRank pre-downloaded at build time** — the 21.6 MB cross-encoder model is baked into the Docker image at `/models/flashrank`; no runtime download, no corruption from concurrent extraction
+- **Title-driven question generation** - documents are not read during question generation; both documents face the same questions, eliminating bias toward whichever document's content was scanned
+- **CRAG with grounding check** - web search results are only used if they pass the same cosine similarity threshold (≥ 0.35) as RAG results; avoids hallucination from off-topic web results
+- **Parent-child chunking** - children (400 chars) are retrieved for precision; parents (1800 chars) are returned for answering, giving full context without noise
+- **All-not-found handling** - when every document returns "not found" for a question, scores default to neutral (5/10) so unanswerable questions don't penalise all options equally
+- **FlashRank pre-downloaded at build time** - the 21.6 MB cross-encoder model is baked into the Docker image at `/models/flashrank`; no runtime download, no corruption from concurrent extraction
 
