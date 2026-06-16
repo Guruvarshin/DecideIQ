@@ -71,7 +71,7 @@ export default function Dashboard() {
         </div>
 
         {loading && (
-          <div className="text-center py-20 text-gray-400">Loading sessionsâ€¦</div>
+          <div className="text-center py-20 text-gray-400">Loading sessions...</div>
         )}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
