@@ -85,7 +85,7 @@ def run_ragas(dataset: Dataset) -> dict:
         dataset=dataset,
         metrics=_PRODUCTION_METRICS,
         raise_exceptions=False,
-        run_config=RunConfig(max_workers=2, max_retries=3, timeout=60),
+        run_config=RunConfig(max_workers=1, max_retries=5, timeout=120),
     )
     scores = result.to_pandas()
     questions = dataset["question"]
@@ -107,7 +107,7 @@ def run_ragas_full(dataset: Dataset) -> dict:
         dataset=dataset,
         metrics=_FULL_METRICS,
         raise_exceptions=False,
-        run_config=RunConfig(max_workers=2, max_retries=3, timeout=60),
+        run_config=RunConfig(max_workers=1, max_retries=5, timeout=120),
     )
     scores = result.to_pandas()
     questions = dataset["question"]

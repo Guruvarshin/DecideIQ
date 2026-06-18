@@ -19,6 +19,7 @@ class _State(TypedDict):
     raw_text: str
     question: str
     will_use_rag: bool
+    top_k: int
     # ── intermediate: populated as the graph runs
     sub_queries: list[str]
     hyde_emb: list[float]
@@ -52,7 +53,10 @@ async def _generate_node(state: _State) -> dict:
 
 async def _retrieve_node(state: _State) -> dict:
     word_count = len(state["raw_text"].split())
-    per_query_k = 3 if word_count <= 3000 else (5 if word_count <= 8000 else 8)
+    # Retrieve more candidates per query so the reranker has a larger pool.
+    # Diagnostics showed R@20=0.99 vs R@8=0.75 on insurance docs — the relevant
+    # chunks exist in the index but weren't surfaced in the top-8.
+    per_query_k = 5 if word_count <= 3000 else 8
 
     tasks = [
         retrieve(state["session_id"], state["doc_idx"], state["raw_text"], q, top_k=per_query_k)
@@ -74,11 +78,14 @@ async def _retrieve_node(state: _State) -> dict:
                 seen.add(p)
                 unique_parents.append(p)
 
-    return {"unique_parents": unique_parents}
+    # Cap at 20: diagnostics showed R@20=0.99 on insurance docs (87-108 parent chunks).
+    # Passing more than 20 to the reranker adds noise without recall benefit.
+    return {"unique_parents": unique_parents[:20]}
 
 
 def _rerank_node(state: _State) -> dict:
-    return {"reranked": rerank(state["question"], state["unique_parents"], top_k=8)}
+    # Rerank the larger candidate pool down to top_k (default 5 from grid search).
+    return {"reranked": rerank(state["question"], state["unique_parents"], top_k=state["top_k"])}
 
 
 async def _compress_node(state: _State) -> dict:
@@ -159,6 +166,7 @@ async def run_pipeline(
     raw_text: str,
     question: str,
     will_use_rag: bool,
+    top_k: int = 5,
 ) -> dict:
     result = await _graph.ainvoke({
         "session_id": session_id,
@@ -166,6 +174,7 @@ async def run_pipeline(
         "raw_text": raw_text,
         "question": question,
         "will_use_rag": will_use_rag,
+        "top_k": top_k,
         "sub_queries": [],
         "hyde_emb": [],
         "unique_parents": [],

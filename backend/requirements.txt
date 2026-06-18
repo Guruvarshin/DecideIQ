@@ -33,6 +33,7 @@ tavily-python==0.5.0
 ragas==0.2.14
 datasets==3.2.0
 
+pytest==8.3.4
 python-dotenv==1.0.1
 pydantic==2.10.4
 pydantic-settings==2.7.0

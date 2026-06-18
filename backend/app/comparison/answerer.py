@@ -11,7 +11,11 @@ _PROMPT = ChatPromptTemplate.from_template(
     "- Include ALL relevant numbers mentioned in the context for this question — do not pick just one\n"
     "- If the question asks about multiple items (e.g. health + life insurance), cover each one\n"
     "- Be concise but complete — one to three sentences\n"
-    "- If the context does not contain the answer, respond with exactly: Not found in document.\n\n"
+    "- IMPORTANT: If the context explicitly states that something is NOT available, NOT provided, or NOT "
+    "permitted, state that clearly and directly. Do NOT hedge or say 'it is unclear'. "
+    "Example: if context says 'No remote work', answer 'Remote work is not permitted.' "
+    "Example: if context says 'No learning budget', answer 'No learning budget or training allowance is provided.'\n"
+    "- If the context does not contain the answer at all, respond with exactly: Not found in document.\n\n"
     "Question: {question}\n\n"
     "Context:\n{context}"
 )
