@@ -12,8 +12,13 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download FlashRank model so it's baked into the image (avoids corrupt mid-run downloads)
-RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/models/flashrank')"
+# Pre-download FlashRank model so it's baked into the image (avoids corrupt mid-run downloads).
+# Retry up to 3 times; if all fail the build still succeeds and the model downloads at first run.
+RUN for i in 1 2 3; do \
+      python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/models/flashrank')" && break; \
+      echo "FlashRank download attempt $i failed, retrying..."; \
+      sleep 5; \
+    done; exit 0
 
 COPY . .
 
