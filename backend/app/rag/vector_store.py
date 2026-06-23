@@ -38,13 +38,36 @@ def add_chunks(
     )
 
 
+_EMPTY_QUERY_RESULT: chromadb.QueryResult = {
+    "ids": [[]],
+    "embeddings": None,
+    "documents": [[]],
+    "metadatas": [[]],
+    "distances": [[]],
+    "uris": None,
+    "data": None,
+    "included": ["documents", "metadatas", "distances"],
+}
+
+
 def query_dense(
     session_id: str,
     doc_idx: int,
     query_embedding: list[float],
     n_results: int = 20,
 ) -> chromadb.QueryResult:
-    col = _get_client().get_collection(_col_name(session_id, doc_idx))
+    try:
+        col = _get_client().get_collection(_col_name(session_id, doc_idx))
+    except Exception:
+        # Collection missing — container likely restarted and wiped chroma_data.
+        # Return empty result so retriever degrades to BM25-only instead of crashing.
+        import logging
+        logging.getLogger(__name__).warning(
+            "ChromaDB collection %s not found — dense retrieval skipped, "
+            "falling back to BM25 only. Re-upload documents to restore full retrieval.",
+            _col_name(session_id, doc_idx),
+        )
+        return _EMPTY_QUERY_RESULT
     return col.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
