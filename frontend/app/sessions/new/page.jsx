@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '@/lib/api'
@@ -81,6 +81,71 @@ function StepTitle({ onDone }) {
         </button>
       </form>
     </Card>
+  )
+}
+
+const UPLOAD_STEPS = [
+  { label: 'Parsing document',   duration: 4000  },
+  { label: 'Chunking text',      duration: 3000  },
+  { label: 'Generating embeddings', duration: 18000 },
+  { label: 'Indexing into store', duration: 4000  },
+]
+
+function UploadProgress() {
+  const [stepIdx, setStepIdx] = useState(0)
+  const [dots, setDots]       = useState('')
+
+  useEffect(() => {
+    let idx = 0
+    let stepTimer
+
+    const advance = () => {
+      if (idx < UPLOAD_STEPS.length - 1) {
+        idx++
+        setStepIdx(idx)
+        stepTimer = setTimeout(advance, UPLOAD_STEPS[idx].duration)
+      }
+    }
+    stepTimer = setTimeout(advance, UPLOAD_STEPS[0].duration)
+
+    const dotTimer = setInterval(() => {
+      setDots(d => d.length >= 3 ? '' : d + '.')
+    }, 400)
+
+    return () => {
+      clearTimeout(stepTimer)
+      clearInterval(dotTimer)
+    }
+  }, [])
+
+  return (
+    <div className="py-2">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+        <span className="text-sm text-indigo-600 font-medium">
+          {UPLOAD_STEPS[stepIdx].label}{dots}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {UPLOAD_STEPS.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${
+              i < stepIdx  ? 'bg-emerald-500' :
+              i === stepIdx ? 'bg-indigo-500 animate-pulse' :
+              'bg-gray-200'
+            }`} />
+            <span className={`text-xs ${
+              i < stepIdx  ? 'text-emerald-600 line-through' :
+              i === stepIdx ? 'text-indigo-700 font-medium' :
+              'text-gray-400'
+            }`}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 mt-3">
+        Large PDFs can take up to 60 seconds to index. Please wait.
+      </p>
+    </div>
   )
 }
 
@@ -170,7 +235,7 @@ function StepUpload({ sessionId, onDone }) {
             accept=".pdf,.html,.htm,.txt,.png,.jpg,.jpeg"
           />
           {uploading
-            ? <p className="text-sm text-indigo-600 font-medium">Uploading and indexing...</p>
+            ? <UploadProgress />
             : <p className="text-sm text-gray-500">Click to select a file <span className="text-gray-400">(PDF / HTML / TXT / Image)</span></p>
           }
         </div>
@@ -264,12 +329,12 @@ function StepGenerate({ sessionId, onDone }) {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
 
-  useState(() => {
+  useEffect(() => {
     api.generateQuestions(sessionId)
       .then(data => setQuestions(data.questions))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  })
+  }, [sessionId])
 
   return (
     <Card>
