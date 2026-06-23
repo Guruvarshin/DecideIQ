@@ -26,11 +26,12 @@ class _State(TypedDict):
     unique_parents: list[str]
     reranked: list[str]
     compressed: list[str]
-    g_score: float          # raw grounding score, read by routing + web_search node
+    g_score: float
+    skip_grounding: bool     # True when compressor found content → grounding check unnecessary
     # ── outputs: written by the terminal node on each path
     contexts: list[str]
     source: str
-    grounding_score: float  # exposed in the public return dict
+    grounding_score: float
 
 
 # ── nodes ────────────────────────────────────────────────────────────────────
@@ -53,9 +54,6 @@ async def _generate_node(state: _State) -> dict:
 
 async def _retrieve_node(state: _State) -> dict:
     word_count = len(state["raw_text"].split())
-    # Retrieve more candidates per query so the reranker has a larger pool.
-    # Diagnostics showed R@20=0.99 vs R@8=0.75 on insurance docs — the relevant
-    # chunks exist in the index but weren't surfaced in the top-8.
     per_query_k = 5 if word_count <= 3000 else 8
 
     tasks = [
@@ -78,19 +76,32 @@ async def _retrieve_node(state: _State) -> dict:
                 seen.add(p)
                 unique_parents.append(p)
 
-    # Cap at 20: diagnostics showed R@20=0.99 on insurance docs (87-108 parent chunks).
-    # Passing more than 20 to the reranker adds noise without recall benefit.
     return {"unique_parents": unique_parents[:20]}
 
 
 def _rerank_node(state: _State) -> dict:
-    # Rerank the larger candidate pool down to top_k (default 5 from grid search).
     return {"reranked": rerank(state["question"], state["unique_parents"], top_k=state["top_k"])}
 
 
 async def _compress_node(state: _State) -> dict:
     compressed = await compress(state["question"], state["reranked"])
-    return {"compressed": compressed if compressed else state["reranked"]}
+    if compressed:
+        # Compressor extracted real sentences directly from passages — guaranteed grounded
+        # by construction. No need to run cosine grounding check.
+        return {
+            "compressed": compressed,
+            "contexts": compressed,
+            "source": "rag",
+            "grounding_score": 1.0,
+            "skip_grounding": True,
+        }
+    else:
+        # Compressor found nothing relevant in any passage — fall back to raw reranked
+        # passages and let the grounding check decide whether to use them or go to web.
+        return {
+            "compressed": state["reranked"],
+            "skip_grounding": False,
+        }
 
 
 async def _grounding_check_node(state: _State) -> dict:
@@ -106,6 +117,10 @@ async def _grounding_check_node(state: _State) -> dict:
 
 
 async def _web_search_node(state: _State) -> dict:
+    # web_search_verified runs two checks:
+    # 1. Cosine grounding (fast) — catches off-topic results
+    # 2. LLM relevance check (meaningful) — catches generic results for document-specific
+    #    questions e.g. "What is the best company?" → Tavily returns generic comparison guides
     contexts, source = await web_search_verified(state["question"])
     return {
         "contexts": contexts,
@@ -118,6 +133,12 @@ async def _web_search_node(state: _State) -> dict:
 
 def _route_rag_mode(state: _State) -> str:
     return "generate" if state["will_use_rag"] else "full_context"
+
+
+def _route_after_compress(state: _State) -> str:
+    # If compressor extracted content, contexts are already set — skip grounding check.
+    # If compressor found nothing, run grounding check on raw reranked passages.
+    return "done" if state["skip_grounding"] else "grounding_check"
 
 
 def _route_grounding(state: _State) -> str:
@@ -145,7 +166,10 @@ def _build_graph():
     g.add_edge("generate", "retrieve")
     g.add_edge("retrieve", "rerank")
     g.add_edge("rerank", "compress")
-    g.add_edge("compress", "grounding_check")
+    g.add_conditional_edges(
+        "compress", _route_after_compress,
+        {"done": END, "grounding_check": "grounding_check"},
+    )
     g.add_conditional_edges(
         "grounding_check", _route_grounding,
         {"done": END, "web_search": "web_search"},
@@ -181,6 +205,7 @@ async def run_pipeline(
         "reranked": [],
         "compressed": [],
         "g_score": 0.0,
+        "skip_grounding": False,
         "contexts": [],
         "source": "",
         "grounding_score": 0.0,

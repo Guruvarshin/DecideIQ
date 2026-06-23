@@ -49,10 +49,9 @@ def _is_not_found(answer: str) -> bool:
 
 async def score_answers(question: str, answers: list[str]) -> list[int]:
     n = len(answers)
-    # If every doc failed to find an answer, return neutral 5s — the question
-    # doesn't differentiate and shouldn't drag down all scores equally.
-    if all(_is_not_found(a) for a in answers):
-        return [5] * n
+    # Always call the LLM — the prompt already instructs it to score "Not found" answers
+    # as 1. Removing the short-circuit ensures consistent scoring and avoids the previous
+    # bug where all-not-found returned [5]*n (yellow in UI) instead of [1]*n (red).
     formatted = "\n".join(
         f"Option {i + 1}: {a}" for i, a in enumerate(answers)
     )

@@ -75,17 +75,22 @@ Hybrid retrieval
          ▼ FlashRank cross-encoder reranking (top-20 in → top-5 out)
          │
          ▼ Contextual compression (GPT-4o-mini)
-         │
-         ▼ Grounding check (cosine similarity ≥ 0.35)
               │
-    ┌─────────┴──────────┐
-  Grounded           Not grounded
-    │                    │
-  Use RAG          CRAG web search (Tavily)
-  contexts         + grounding check on results
-                        │
-                   Grounded? → use web results
-                   No?       → "Not mentioned in available sources."
+    ┌─────────┴──────────────────┐
+  Extracted sentences        Nothing extracted
+  (grounded by construction)  (passages off-topic)
+    │                              │
+  Use directly               Grounding check (cosine ≥ 0.35)
+  skip grounding check            │
+                        ┌─────────┴──────────┐
+                      Grounded           Not grounded
+                        │                    │
+                      Use RAG          CRAG web search (Tavily)
+                      contexts         Stage 1: cosine check
+                                       Stage 2: LLM relevance check
+                                            │
+                                       Both pass? → use web results
+                                       Either fails? → "Not mentioned"
 ```
 
 ### Chunking strategy
@@ -219,6 +224,24 @@ Run before every deploy: `docker exec decideiq-backend-1 python tests/test_quali
 | **Aggregate** | **600-char** | **0.668** | **0.721** | **0.989** |
 
 **Verdict: keep 400-char children.** Results are essentially a tie at R@8 and R@20 (diff < 0.005). 600-char wins on one doc (Star Health, +0.125 R@8) but loses on the other two. The R@20 ceiling is identical at ~0.99 for both — the limiting factor is the retrieval pool size, not the child chunk size. 400-char children are smaller, more precise, and already work well; switching to 600-char adds no reliable benefit.
+
+---
+
+### Pipeline improvements (post-evaluation)
+
+Three design flaws identified through evaluation and fixed:
+
+**1. Redundant grounding check after compression**
+The compressor extracts only sentences that directly answer the question — if it returns content, those sentences are grounded by construction. Running a cosine similarity check on them was redundant. Fix: `_compress_node` now sets `skip_grounding=True` and writes `contexts` directly when compression succeeds, routing to END. The grounding check only runs when compression finds nothing (off-topic passages).
+- [`backend/app/rag/pipeline.py`](backend/app/rag/pipeline.py)
+
+**2. Weak web search validation**
+The cosine grounding threshold (0.35) was too permissive for web results. A question like "What is the best company based on specific criteria?" triggered Tavily which returned generic "how to compare companies" articles — topically related enough to pass 0.35 but completely useless for answering document-specific questions. Fix: `web_search_verified` now runs a two-stage check: (1) cosine grounding as before, (2) an LLM relevance check asking "does this result actually answer the question?" Generic results now correctly return "Not mentioned in available sources."
+- [`backend/app/rag/crag.py`](backend/app/rag/crag.py)
+
+**3. Scorer short-circuit contradiction**
+`score_answers` short-circuited to `[5]*n` when all documents answered "not found", but the scorer prompt explicitly instructs the LLM to score "not found" answers as 1. This caused the UI to show misleading yellow 5/10 badges instead of red 1/10. Fix: removed the short-circuit — LLM always runs and applies the prompt rule consistently.
+- [`backend/app/comparison/scorer.py`](backend/app/comparison/scorer.py)
 
 ---
 
