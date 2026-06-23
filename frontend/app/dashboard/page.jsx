@@ -18,11 +18,31 @@ function statusBadge(status) {
 
 export default function Dashboard() {
   const router = useRouter()
-  const [sessions, setSessions] = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState('')
+  const [sessions, setSessions]   = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
+  const [deleting, setDeleting]   = useState(null)  // session_id being deleted
+
+  async function handleDelete(e, sessionId) {
+    e.preventDefault()   // prevent Link navigation
+    e.stopPropagation()
+    if (!confirm('Delete this comparison? This cannot be undone.')) return
+    setDeleting(sessionId)
+    try {
+      await api.deleteSession(sessionId)
+      setSessions(prev => prev.filter(s => s.session_id !== sessionId))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
+    // Ping backend silently to wake Render free tier before user starts uploading.
+    // Ignored if it fails — purely for cold start warmup.
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/health`).catch(() => {})
+
     api.listSessions()
       .then(setSessions)
       .catch(err => {
@@ -89,27 +109,37 @@ export default function Dashboard() {
 
         <div className="space-y-3">
           {sessions.map(s => (
-            <Link
-              key={s.session_id}
-              href={`/sessions/${s.session_id}`}
-              className="block bg-white border border-gray-200 rounded-xl px-5 py-4 hover:border-indigo-300 hover:shadow-sm transition animate-fade-in"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {statusBadge(s.status)}
-                  <span className="font-semibold text-gray-800">
-                    {s.title || 'Untitled comparison'}
-                  </span>
+            <div key={s.session_id} className="relative group">
+              <Link
+                href={`/sessions/${s.session_id}`}
+                className="block bg-white border border-gray-200 rounded-xl px-5 py-4 hover:border-indigo-300 hover:shadow-sm transition animate-fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {statusBadge(s.status)}
+                    <span className="font-semibold text-gray-800">
+                      {s.title || 'Untitled comparison'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400">{formatDate(s.created_at)}</span>
                 </div>
-                <span className="text-xs text-gray-400">{formatDate(s.created_at)}</span>
-              </div>
-              <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
-                <span>{s.document_count} document{s.document_count !== 1 ? 's' : ''}</span>
-                {s.winner_name && (
-                  <span className="text-emerald-600 font-medium">Winner: {s.winner_name}</span>
-                )}
-              </div>
-            </Link>
+                <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                  <span>{s.document_count} document{s.document_count !== 1 ? 's' : ''}</span>
+                  {s.winner_name && (
+                    <span className="text-emerald-600 font-medium">Winner: {s.winner_name}</span>
+                  )}
+                </div>
+              </Link>
+              <button
+                onClick={e => handleDelete(e, s.session_id)}
+                disabled={deleting === s.session_id}
+                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity
+                           text-xs text-red-400 hover:text-red-600 bg-white border border-red-200
+                           hover:border-red-400 px-2 py-1 rounded-md disabled:opacity-40"
+              >
+                {deleting === s.session_id ? '...' : 'Delete'}
+              </button>
+            </div>
           ))}
         </div>
       </div>

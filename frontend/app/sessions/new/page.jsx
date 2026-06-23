@@ -85,15 +85,15 @@ function StepTitle({ onDone }) {
 }
 
 const UPLOAD_STEPS = [
-  { label: 'Parsing document',   duration: 4000  },
-  { label: 'Chunking text',      duration: 3000  },
+  { label: 'Parsing document',      duration: 4000  },
+  { label: 'Chunking text',         duration: 3000  },
   { label: 'Generating embeddings', duration: 18000 },
-  { label: 'Indexing into store', duration: 4000  },
+  { label: 'Indexing into store',   duration: null  }, // last step — stays active until done
 ]
 
 function UploadProgress() {
   const [stepIdx, setStepIdx] = useState(0)
-  const [dots, setDots]       = useState('')
+  const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
     let idx = 0
@@ -103,28 +103,35 @@ function UploadProgress() {
       if (idx < UPLOAD_STEPS.length - 1) {
         idx++
         setStepIdx(idx)
-        stepTimer = setTimeout(advance, UPLOAD_STEPS[idx].duration)
+        const next = UPLOAD_STEPS[idx].duration
+        if (next) stepTimer = setTimeout(advance, next)
+        // last step has null duration — stays on "Indexing" until upload resolves
       }
     }
     stepTimer = setTimeout(advance, UPLOAD_STEPS[0].duration)
 
-    const dotTimer = setInterval(() => {
-      setDots(d => d.length >= 3 ? '' : d + '.')
-    }, 400)
+    // Elapsed counter — reassures user the process is alive
+    const elapsedTimer = setInterval(() => {
+      setElapsed(s => s + 1)
+    }, 1000)
 
     return () => {
       clearTimeout(stepTimer)
-      clearInterval(dotTimer)
+      clearInterval(elapsedTimer)
     }
   }, [])
 
+  const currentLabel = UPLOAD_STEPS[stepIdx].label
+  const isLast = stepIdx === UPLOAD_STEPS.length - 1
+
   return (
     <div className="py-2">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-        <span className="text-sm text-indigo-600 font-medium">
-          {UPLOAD_STEPS[stepIdx].label}{dots}
-        </span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <span className="text-sm text-indigo-600 font-medium">{currentLabel}...</span>
+        </div>
+        <span className="text-xs text-gray-400 tabular-nums">{elapsed}s</span>
       </div>
       <div className="space-y-1.5">
         {UPLOAD_STEPS.map((s, i) => (
@@ -142,9 +149,15 @@ function UploadProgress() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-400 mt-3">
-        Large PDFs can take up to 60 seconds to index. Please wait.
-      </p>
+      {isLast && (
+        <p className="text-xs text-gray-400 mt-3">
+          {elapsed < 30
+            ? 'Building the vector index — almost there...'
+            : elapsed < 60
+            ? 'Large document detected — still working, please wait...'
+            : 'Taking longer than usual — this can happen with very large PDFs.'}
+        </p>
+      )}
     </div>
   )
 }
@@ -376,11 +389,133 @@ function StepGenerate({ sessionId, onDone }) {
   )
 }
 
+// Comparison progress — timer-based stages that reflect the real pipeline
+// Pipeline per question (sequential per doc): retrieval + answer + scoring
+// Final step: verdict generation
+function CompareProgress({ nQuestions, nDocs }) {
+  const PER_Q_MS   = 9000   // ~9s per question (retrieval + answer + score per doc sequentially)
+  const VERDICT_MS = 10000  // ~10s for Claude Sonnet verdict
+
+  const totalMs = nQuestions * PER_Q_MS + VERDICT_MS
+
+  const stages = [
+    ...Array.from({ length: nQuestions }, (_, i) => ({
+      label: `Question ${i + 1} of ${nQuestions}`,
+      sub:   'Retrieving context, answering, scoring across all documents',
+      ms:    PER_Q_MS,
+    })),
+    { label: 'Writing verdict', sub: 'Claude Sonnet synthesising final recommendation', ms: VERDICT_MS },
+  ]
+
+  const [stageIdx, setStageIdx] = useState(0)
+  const [elapsed,  setElapsed]  = useState(0)
+  const [qDone,    setQDone]    = useState(0)
+
+  useEffect(() => {
+    let idx = 0
+    let timer
+
+    const advance = () => {
+      idx++
+      if (idx < stages.length) {
+        setStageIdx(idx)
+        if (idx < nQuestions) setQDone(idx)
+        timer = setTimeout(advance, stages[idx].ms)
+      }
+    }
+    timer = setTimeout(advance, stages[0].ms)
+
+    const tick = setInterval(() => setElapsed(s => s + 1), 1000)
+    return () => { clearTimeout(timer); clearInterval(tick) }
+  }, [])
+
+  const isVerdict   = stageIdx === stages.length - 1
+  const pct         = Math.min(Math.round((elapsed / (totalMs / 1000)) * 100), 95)
+  const currentStage = stages[stageIdx]
+
+  return (
+    <div className="py-2">
+      {/* Top: current stage */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <span className="text-sm font-semibold text-indigo-700">{currentStage.label}</span>
+        </div>
+        <span className="text-xs text-gray-400 tabular-nums">{elapsed}s</span>
+      </div>
+
+      <p className="text-xs text-gray-500 mb-4">{currentStage.sub}</p>
+
+      {/* Progress bar */}
+      <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
+        <div
+          className="h-2 rounded-full bg-indigo-500 transition-all duration-1000"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {/* Question tracker */}
+      {!isVerdict && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {Array.from({ length: nQuestions }, (_, i) => (
+            <span key={i} className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${
+              i < qDone   ? 'bg-emerald-500 text-white' :
+              i === qDone ? 'bg-indigo-500 text-white animate-pulse' :
+              'bg-gray-200 text-gray-400'
+            }`}>
+              {i + 1}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Stage list */}
+      <div className="space-y-1.5">
+        {[
+          { label: `Answering ${nQuestions} questions`, done: isVerdict, active: !isVerdict },
+          { label: 'Writing verdict',                   done: false,      active: isVerdict  },
+        ].map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+              s.done   ? 'bg-emerald-500' :
+              s.active ? 'bg-indigo-500 animate-pulse' :
+              'bg-gray-200'
+            }`} />
+            <span className={`text-xs ${
+              s.done   ? 'text-emerald-600 line-through' :
+              s.active ? 'text-indigo-700 font-medium' :
+              'text-gray-400'
+            }`}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs text-gray-400 mt-4">
+        {elapsed < 30  ? 'Processing questions...' :
+         elapsed < 90  ? 'Large documents take longer — still working...' :
+                         'Almost done — writing your verdict...'}
+      </p>
+    </div>
+  )
+}
+
 // Step 5: run comparison
 function StepCompare({ sessionId }) {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const router  = useRouter()
+  const [loading,    setLoading]    = useState(false)
+  const [error,      setError]      = useState('')
+  const [nQuestions, setNQuestions] = useState(8)   // default estimate
+  const [nDocs,      setNDocs]      = useState(2)
+
+  // Fetch session to get real question + doc count for accurate progress
+  useEffect(() => {
+    api.getSession(sessionId).then(s => {
+      setNDocs(s.documents?.length || 2)
+    }).catch(() => {})
+    api.getQuestions(sessionId).then(q => {
+      setNQuestions(q.generated_questions?.length || 8)
+    }).catch(() => {})
+  }, [sessionId])
 
   async function run() {
     setError('')
@@ -397,19 +532,14 @@ function StepCompare({ sessionId }) {
   return (
     <Card>
       <h2 className="text-lg font-bold mb-1">Run comparison</h2>
-      <p className="text-sm text-gray-500 mb-6">
-        The AI will retrieve context from each document, answer every question, score answers comparatively,
-        and write a final verdict. This takes 1-3 minutes depending on document size.
+      <p className="text-sm text-gray-500 mb-5">
+        The AI retrieves context per document, answers every question, scores comparatively, and writes a verdict.
       </p>
 
       {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
 
       {loading ? (
-        <div className="text-center py-10">
-          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm font-medium text-gray-700">Running AI comparison...</p>
-          <p className="text-xs text-gray-400 mt-1">Retrieving context - Answering questions - Scoring - Writing verdict</p>
-        </div>
+        <CompareProgress nQuestions={nQuestions} nDocs={nDocs} />
       ) : (
         <button
           onClick={run}

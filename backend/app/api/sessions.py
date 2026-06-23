@@ -4,6 +4,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 from app.core.database import get_database
 from app.core.dependencies import get_current_user
+from app.rag.vector_store import delete_doc_collection
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -47,6 +48,22 @@ async def list_sessions(current_user: dict = Depends(get_current_user)):
             "created_at": s["created_at"],
         })
     return sessions
+
+
+@router.delete("/{session_id}", status_code=204)
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    db = get_database()
+    try:
+        oid = ObjectId(session_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
+    session = await db.sessions.find_one({"_id": oid, "user_id": current_user["_id"]})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    # Clean up ChromaDB collections for all documents in the session
+    for i in range(len(session.get("documents", []))):
+        delete_doc_collection(session_id, i)
+    await db.sessions.delete_one({"_id": oid})
 
 
 @router.get("/{session_id}")
