@@ -14,6 +14,7 @@ out/
 chroma_data/
 
 docs/
+tests/
 
 *.log
 .DS_Store
