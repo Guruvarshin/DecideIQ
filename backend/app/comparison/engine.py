@@ -19,20 +19,23 @@ async def run_comparison(session_id: str, session: dict) -> dict:
     question_results = []
 
     for question in questions:
-        # Retrieve context for every document concurrently
-        pipeline_tasks = [
-            run_pipeline(
+        # Run pipeline sequentially per document to cap peak memory usage.
+        # Concurrent pipelines each hold LangGraph state + embeddings + reranked
+        # passages in RAM simultaneously — on Render free tier (512MB) this causes
+        # OOM with 3+ large documents. Sequential adds ~2s latency per question
+        # but keeps memory flat instead of multiplying by n_docs.
+        pipeline_results = []
+        for i, doc in enumerate(docs):
+            result = await run_pipeline(
                 session_id=session_id,
                 doc_idx=i,
                 raw_text=doc["raw_text"],
                 question=question,
                 will_use_rag=doc.get("will_use_rag", False),
             )
-            for i, doc in enumerate(docs)
-        ]
-        pipeline_results = await asyncio.gather(*pipeline_tasks)
+            pipeline_results.append(result)
 
-        # Answer the question per document concurrently
+        # Answer the question per document concurrently (lightweight — just LLM calls)
         answer_tasks = [
             answer_question(question, pr["contexts"])
             for pr in pipeline_results

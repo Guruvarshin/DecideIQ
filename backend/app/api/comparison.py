@@ -5,6 +5,7 @@ from app.core.database import get_database
 from app.core.dependencies import get_current_user
 from app.comparison.engine import run_comparison
 from app.comparison.verdict import generate_verdict
+from app.rag.vector_store import delete_doc_collection
 
 router = APIRouter(prefix="/sessions", tags=["comparison"])
 
@@ -40,6 +41,13 @@ async def compare_session(
         {"_id": oid},
         {"$set": {"comparison_result": result, "status": "compared"}},
     )
+
+    # Free ChromaDB collections now that comparison is done — results are stored
+    # in MongoDB so vectors are no longer needed. Prevents HNSW indexes accumulating
+    # in RAM across sessions on the Render free tier (512MB limit).
+    n_docs = len(session.get("documents", []))
+    for i in range(n_docs):
+        delete_doc_collection(session_id, i)
 
     return result
 
