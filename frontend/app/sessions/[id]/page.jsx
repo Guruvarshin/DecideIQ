@@ -8,6 +8,13 @@ import { api } from '@/lib/api'
 // ── Utilities ────────────────────────────────────────────────────────────────
 function pct(v) { return Math.round(v * 100) }
 
+const NOT_FOUND_PHRASES = ['not found in document', 'not mentioned in available sources', 'no information']
+function isNotFound(answer) {
+  if (!answer) return false
+  const a = answer.toLowerCase()
+  return NOT_FOUND_PHRASES.some(p => a.includes(p))
+}
+
 function SourceBadge({ source }) {
   const map = {
     rag:                  'bg-blue-100 text-blue-700',
@@ -84,8 +91,12 @@ function QATable({ questionResults }) {
             <span className="text-sm font-medium text-gray-800 flex-1 pr-4">{qr.question}</span>
             <div className="flex items-center gap-2 flex-shrink-0">
               {qr.per_doc.map(pd => (
-                <span key={pd.doc_name} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                  {pd.doc_name.split(' ')[0]}: {pd.score}/10
+                <span key={pd.doc_name} className={`text-xs font-bold px-2 py-0.5 rounded ${
+                  isNotFound(pd.answer)
+                    ? 'text-gray-400 bg-gray-100'
+                    : 'text-indigo-700 bg-indigo-50'
+                }`}>
+                  {pd.doc_name.split(' ')[0]}: {isNotFound(pd.answer) ? 'N/A' : `${pd.score}/10`}
                 </span>
               ))}
               <span className="text-gray-400 text-sm">{expanded === i ? '▲' : '▼'}</span>
@@ -98,13 +109,19 @@ function QATable({ questionResults }) {
                 <div key={pd.doc_name} className="px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-bold text-gray-600">{pd.doc_name}</span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      pd.score >= 8 ? 'bg-emerald-100 text-emerald-700' :
-                      pd.score >= 5 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {pd.score}/10
-                    </span>
+                    {isNotFound(pd.answer) ? (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+                        N/A — skipped
+                      </span>
+                    ) : (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        pd.score >= 8 ? 'bg-emerald-100 text-emerald-700' :
+                        pd.score >= 5 ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-600'
+                      }`}>
+                        {pd.score}/10
+                      </span>
+                    )}
                     <SourceBadge source={pd.source} />
                     {pd.grounding_score > 0 && (
                       <span className="text-xs text-gray-400">
