@@ -1,9 +1,11 @@
 import numpy as np
+from langsmith import traceable
 from app.rag.embedder import embed_query, embed_texts
 
 GROUNDING_THRESHOLD = 0.35
 
 
+@traceable(name="grounding_score", metadata={"threshold": GROUNDING_THRESHOLD})
 async def grounding_score(query: str, contexts: list[str]) -> float:
     if not contexts:
         return 0.0

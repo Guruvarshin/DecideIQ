@@ -1,4 +1,5 @@
 from __future__ import annotations
+from langsmith import traceable
 from app.rag.chunker import build_parent_child_chunks
 from app.rag.embedder import embed_query
 from app.rag.vector_store import query_dense
@@ -16,6 +17,7 @@ def _rrf(lists: list[list[int]]) -> dict[int, float]:
     return scores
 
 
+@traceable(name="hybrid_retrieve")
 async def retrieve(
     session_id: str,
     doc_idx: int,

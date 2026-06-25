@@ -3,6 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo
+
+# LangSmith tracing is enabled automatically when LANGSMITH_API_KEY and
+# LANGSMITH_TRACING=true are set in the environment — no code needed here.
 from app.api.auth import router as auth_router
 from app.api.sessions import router as sessions_router
 from app.api.documents import router as documents_router

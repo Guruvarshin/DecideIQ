@@ -1,5 +1,6 @@
 from __future__ import annotations
 from flashrank import Ranker, RerankRequest
+from langsmith import traceable
 
 _ranker: Ranker | None = None
 
@@ -11,6 +12,7 @@ def _get_ranker() -> Ranker:
     return _ranker
 
 
+@traceable(name="flashrank_rerank", metadata={"model": "ms-marco-MiniLM-L-12-v2"})
 def rerank(query: str, passages: list[str], top_k: int = 5) -> list[str]:
     if not passages:
         return []

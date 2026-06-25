@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 10080
 
     frontend_url: str = "http://localhost:3000"
-    chroma_persist_path: str = "./chroma_data"
+
+    pinecone_api_key: str
+    pinecone_index_name: str = "decideiq"
 
     @property
     def allowed_origins(self) -> list[str]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from openai import AsyncOpenAI
+from langsmith import traceable
 from app.core.config import settings
 
 EMBED_MODEL = "text-embedding-3-small"
@@ -15,6 +16,7 @@ def _get_client() -> AsyncOpenAI:
     return _client
 
 
+@traceable(name="embed_texts", metadata={"model": EMBED_MODEL})
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     client = _get_client()
     all_embeddings: list[list[float]] = []
@@ -25,6 +27,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     return all_embeddings
 
 
+@traceable(name="embed_query", metadata={"model": EMBED_MODEL})
 async def embed_query(text: str) -> list[float]:
     results = await embed_texts([text])
     return results[0]

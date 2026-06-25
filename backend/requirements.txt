@@ -19,7 +19,7 @@ langchain-anthropic==0.3.3
 langchain-community==0.3.13
 langgraph==0.2.60
 
-chromadb==0.6.3
+pinecone==5.3.1
 
 rank_bm25==0.2.2
 
@@ -34,6 +34,7 @@ ragas==0.2.14
 datasets==3.2.0
 
 pytest==8.3.4
+langsmith==0.2.3
 python-dotenv==1.0.1
 pydantic==2.10.4
 pydantic-settings==2.7.0

@@ -42,9 +42,8 @@ async def compare_session(
         {"$set": {"comparison_result": result, "status": "compared"}},
     )
 
-    # Free ChromaDB collections now that comparison is done — results are stored
-    # in MongoDB so vectors are no longer needed. Prevents HNSW indexes accumulating
-    # in RAM across sessions on the Render free tier (512MB limit).
+    # Delete Pinecone namespaces now that comparison is done — results are stored
+    # in MongoDB so vectors are no longer needed.
     n_docs = len(session.get("documents", []))
     for i in range(n_docs):
         delete_doc_collection(session_id, i)

@@ -26,7 +26,7 @@ DecideIQ is a full-stack AI application that compares multiple documents (job of
 | API | FastAPI (async) + Uvicorn |
 | Auth | JWT (PyJWT HS256) in httpOnly cookies, bcrypt |
 | Database | MongoDB Atlas via Motor (async) |
-| Vector store | ChromaDB (persistent, one collection per doc) |
+| Vector store | Pinecone Serverless (one namespace per doc, persistent across restarts) |
 | Embeddings | OpenAI `text-embedding-3-small` (1536-dim) |
 | LLM - answers & scoring | OpenAI `gpt-4o-mini` |
 | LLM - verdict | Anthropic `claude-sonnet-4-6` |
@@ -36,6 +36,7 @@ DecideIQ is a full-stack AI application that compares multiple documents (job of
 | Compression | LangChain contextual compression |
 | Web fallback | CRAG - Tavily search with grounding check |
 | Evaluation | RAGAS 0.2.14 (faithfulness + answer relevancy) |
+| Observability | LangSmith (auto-traces LangChain/LangGraph + manual `@traceable` on embedder, retriever, reranker, grounding) |
 | Ingestion | PyMuPDF, BeautifulSoup, Tesseract OCR, Pillow |
 
 ### Frontend
@@ -309,8 +310,17 @@ DecideIQ/
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 MONGODB_URI=mongodb+srv://...
-JWT_SECRET=your-secret-key
+JWT_SECRET_KEY=your-secret-key
 TAVILY_API_KEY=tvly-...
+
+PINECONE_API_KEY=pcsk_...
+PINECONE_INDEX_NAME=decideiq
+
+# Optional — remove to disable tracing
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=decideiq
 ```
 
 ### Start
@@ -336,7 +346,7 @@ docker exec decideiq-backend-1 python tests/test_ragas_golden.py
 ### Backend → Render
 1. New Web Service → connect GitHub repo
 2. Root directory: `backend` | Runtime: Docker
-3. Add all `.env` keys as environment variables
+3. Add all `.env` keys as environment variables (including `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`, and optionally `LANGSMITH_*`)
 4. Copy the service URL (e.g. `https://decideiq-api.onrender.com`)
 
 ### Frontend → Vercel
@@ -352,6 +362,8 @@ docker exec decideiq-backend-1 python tests/test_ragas_golden.py
 - **Document-grounded question generation** - 5 questions are generated per document from its actual content, then deduplicated across all docs; this surfaces what each option actually covers rather than guessing from the title alone
 - **CRAG with grounding check** - web search results are only used if they pass the same cosine similarity threshold (≥ 0.35) as RAG results; avoids hallucination from off-topic web results
 - **Parent-child chunking** - children (400 chars) are retrieved for precision; parents (1800 chars) are returned for answering, giving full context without noise
-- **All-not-found handling** - when every document returns "not found" for a question, scores default to neutral (5/10) so unanswerable questions don't penalise all options equally
-- **FlashRank pre-downloaded at build time** - the 21.6 MB cross-encoder model is baked into the Docker image at `/models/flashrank`; no runtime download, no corruption from concurrent extraction
+- **All-not-found handling** - when every document returns "not found" for a question, the LLM scores all docs 1/10 and the question is excluded from the final percentage — it doesn't penalise all options equally
+- **Pinecone Serverless vector store** - replaced ChromaDB; one namespace per document (`s{session_id}_d{doc_idx}`), persists across Render restarts, deleted after comparison completes to free storage
+- **LangSmith observability** - full pipeline tracing via `LANGSMITH_*` env vars; LangChain/LangGraph components auto-trace, non-LangChain components (embedder, retriever, reranker, grounding) traced with `@traceable`
+- **Sequential document pipelines** - pipelines run one document at a time during comparison to keep peak memory flat on Render free tier (512MB)
 
